@@ -1,3 +1,4 @@
+import sys
 import requests
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QLabel, QVBoxLayout,
@@ -10,17 +11,12 @@ class TimecodeApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("RunDash")
-        self.setGeometry(200, 200, 800, 400)
+        self.setGeometry(0, 0, 800, 400)
 
         # VLC settings
         self.vlc_url = "http://localhost:8080/requests/status.json"
         self.vlc_password = "vlc"  # Match your VLC Lua HTTP password
         self.auth = requests.auth.HTTPBasicAuth("", self.vlc_password)
-
-
-        self.sim_frame = 0
-        self.sim_time_seconds = 0
-        self.frame_rate = 30
 
 
         # Set black background
@@ -82,7 +78,7 @@ class TimecodeApp(QMainWindow):
 
         # Cue List
         self.cue_list = QListWidget()
-        self.cues = ["Intro", "Scene 1", "Scene 2", "Scene 3", "Outro"]
+        self.cues = ["Ready", "Sync", "Intro", "MAIN", "LIVE CUT", "LIVE", "LIVE OUTRO", "MUSIC OUTRO", "Outro", "Loop", "De-Sync", "ALL STOP"]
         self.current_cue_index = 0
         for cue in self.cues:
             self.cue_list.addItem(cue)
@@ -94,7 +90,7 @@ class TimecodeApp(QMainWindow):
                 font-size: 18px;
             }
             QListWidget::item:selected {
-                background-color: #007f00;
+                background-color: #0000ff;
             }
         """)
         self.update_cue_highlight()
@@ -128,12 +124,6 @@ class TimecodeApp(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_timecode)
         self.timer.start(500)
-        self.sim_frame = 0
-        self.sim_time_seconds = 0
-        self.frame_rate = 30  # 30 FPS
-        self.fake_timer = QTimer(self)
-        self.fake_timer.timeout.connect(self.update_fake_timecode)
-        self.fake_timer.start(int(1000 / self.frame_rate))  # ~33ms
 
 
         # Clock update timer
@@ -146,12 +136,8 @@ class TimecodeApp(QMainWindow):
             response = requests.get(self.vlc_url, auth=self.auth, timeout=0.5)
             if response.status_code == 200:
                 data = response.json()
-                vlc_time = int(data.get("time", 0))
-                if not hasattr(self, "vlc_last_time") or vlc_time != self.vlc_last_time:
-                    # Sync only if new time is different
-                    self.sim_time_seconds = vlc_time
-                    self.sim_frame = 0
-                    self.vlc_last_time = vlc_time
+                vlc_time = float(data.get("time", 0))  # Changed to float just in case
+                self.time_label.setText(self.seconds_to_timecode(vlc_time))
                 self.vlc_connected = True
             else:
                 self.vlc_connected = False
@@ -160,23 +146,12 @@ class TimecodeApp(QMainWindow):
 
 
 
-    def update_fake_timecode(self):
-        if not hasattr(self, "vlc_connected") or not self.vlc_connected:
-            self.sim_time_seconds += 1 / self.frame_rate
-
-        hrs = int(self.sim_time_seconds // 3600)
-        mins = int((self.sim_time_seconds % 3600) // 60)
-        secs = int(self.sim_time_seconds % 60)
-        ms = int((self.sim_time_seconds - int(self.sim_time_seconds)) * 1000)
-
-        self.time_label.setText(f"{hrs:02}:{mins:02}:{secs:02}.{ms:03}")
-
-
     def seconds_to_timecode(self, seconds):
-        hrs = seconds // 3600
-        mins = (seconds % 3600) // 60
-        secs = seconds % 60
-        return f"{hrs:02}:{mins:02}:{secs:02}.00"
+        hrs = int(seconds // 3600)
+        mins = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        ms = int((seconds - int(seconds)) * 1000)  # get milliseconds
+        return f"{hrs:02}:{mins:02}:{secs:02}.{ms:03}"
 
     def update_clock(self):
         from datetime import datetime
